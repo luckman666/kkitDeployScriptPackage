@@ -10,7 +10,7 @@ expect "again"
 send "\r"  
 interact  
   
-spawn ssh-copy-id $hostname  
+spawn ssh-copy-id $hostname -f
 expect {  
 	"*yes/no" {send "yes\r";exp_continue}  
 	"*password:" {send "$passwd\r";exp_continue}  

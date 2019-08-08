@@ -1,20 +1,20 @@
 #!/bin/bash
 #b8_yang@163.com
+#source ./base.config
 bash_path=$(cd "$(dirname "$0")";pwd)
-source ./base.config
-
+source $bash_path/base.config
 
 if [[ "$(whoami)" != "root" ]]; then
 	echo "please run this script as root ." >&2
 	exit 1
 fi
 
-log="./setup.log"  #操作日志存放路径 
-fsize=2000000         
-exec 2>>$log  #如果执行过程中有错误信息均输出到日志文件中
+#log="./setup.log"  #操作日志存放路径
+#fsize=2000000
+#exec 2>>$log  #如果执行过程中有错误信息均输出到日志文件中
 
-echo -e "\033[31m 这个是mysql集群一键部署脚本，node节点开始安装！欢迎关注我的个人公众号“devops的那些事”获得更多实用工具Please continue to enter or ctrl+C to cancel \033[0m"
-
+echo -e "\033[31m 安装资产管理系统！欢迎关注我的个人公众号“devops的那些事”获得更多实用工具！ \033[0m"
+sleep 5
 #yum update
 yum_update(){
 	yum update -y
@@ -48,6 +48,7 @@ echo "FK!~没成功？哥再来一次！！"
 fi
 done
 }
+
 #firewalld
 iptables_config(){
 if [[ `ps -ef | grep firewalld |wc -l` -gt 1 ]];then
@@ -110,99 +111,20 @@ echo "ssh参数配置完毕！！！"
 fi
 }
 
-#set sysctl
-sysctl_config(){
-  cp /etc/sysctl.conf /etc/sysctl.conf.bak
-  cat > /etc/sysctl.conf << EOF
-  net.bridge.bridge-nf-call-iptables = 1
-  net.bridge.bridge-nf-call-ip6tables = 1
-EOF
-  /sbin/sysctl -p
-  echo "sysctl set OK!!"
-}
 
-#swapoff
-swapoff(){
-  /sbin/swapoff -a
-  sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
-  echo "vm.swappiness=0" >> /etc/sysctl.conf
-  /sbin/sysctl -p
-}
 
 get_localip(){
 ipaddr=$(ip addr | awk '/^[0-9]+: / {}; /inet.*global/ {print gensub(/(.*)\/(.*)/, "\\1", "g", $2)}' | grep $ip_segment)
 echo "$ipaddr"
 }
 
-config_docker(){
-grep "tcp://0.0.0.0:2375" /usr/lib/systemd/system/docker.service
-if [[ $? -eq 0 ]];then
-echo "docker API接口已经配置完毕"
-else
-sed -i "/^ExecStart/cExecStart=\/usr\/bin\/dockerd -H tcp:\/\/0\.0\.0\.0:2375 -H unix:\/\/\/var\/run\/docker.sock" /usr/lib/systemd/system/docker.service
-systemctl daemon-reload
-systemctl restart docker.service
-echo "docker API接口已经配置完毕"
-fi
-}
-
-
-deploy_keepalived(){
-test -f /etc/keepalived/keepalived.conf 
-if [[ $? -eq 0 ]];then
-echo "keepalived 部署完毕！！"
-else
-cd $bash_path
-yum install keepalived -y
-sed -i "s/keepalived_vip/$keepalived_vip/g" ./keepalived.conf
-sed -i "/^interface/c interface $interface" ./keepalived.conf
-sed -i "s/outport/$outport/g" ./chk_mysql.sh
-#sed -i "s/interface eth0/interface $interface/g" ./keepalived.conf
-mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
-cp keepalived.conf chk_mysql.sh /etc/keepalived/
-chmod 644 /etc/keepalived/keepalived.conf
-fi
-}
-
 
 change_hosts(){
-num=0
 cd $bash_path
-for host in ${hostip[@]}
-do
-let num+=1
-if [[ $host == `get_localip` ]];then
-`hostnamectl set-hostname $hostname$num`
-
-fi
-done
-
-rm -rf $database_path/mysql/
-mkdir -p $database_path/mysql/{data,backup}
-chmod -R 777 $database_path/mysql/
+`hostnamectl set-hostname $hostname`
+echo $masterip `hostname` >> /etc/hosts
 
 }
-
-
-#ssh trust
-rootssh_trust(){
-
-for host in ${hostip[@]}
-do
-if [[ `get_localip` != $host ]];then
-
-if [[ ! -f "/root/.ssh/id_rsa.pub" ]];then
-expect ssh_trust_init.exp $root_passwd $host
-else
-expect ssh_trust_add.exp $root_passwd $host
-echo "remote machine root user succeed!!!!!!!!!!!!!!!! "
-fi
-
-fi
-done
-
-}
-
 
 #install docker
 install_docker() {
@@ -225,25 +147,50 @@ echo "docker已经安装完毕!!!"
 fi
 }
 
+install_docker_compace() {
+# test -f /usr/local/bin/docker-compose
+# if [[ $? -eq 0 ]];then
+# echo "docker-compose 安装完毕!!"
+# else
+rm -rf /usr/local/bin/docker-compose 
+curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose 
+docker-compose --version
+echo "docker-compose 安装完毕!!"
+# fi
+}
 
+# config docker
+config_docker(){
+grep "tcp://0.0.0.0:2375" /usr/lib/systemd/system/docker.service
+if [[ $? -eq 0 ]];then
+echo "docker API接口已经配置完毕"
+else
+sed -i "/^ExecStart/cExecStart=\/usr\/bin\/dockerd -H tcp:\/\/0\.0\.0\.0:2375 -H unix:\/\/\/var\/run\/docker.sock" /usr/lib/systemd/system/docker.service
+systemctl daemon-reload
+systemctl restart docker.service
+echo "docker API接口已经配置完毕"
+fi
+}
+
+deploy(){
+docker run -d -p 8000:80 -v /opt/data:/data ysrc/xunfeng:latest
+}
 
 main(){
  #yum_update
- #setupkernel
- yum_config
- yum_init
- ssh_config
- iptables_config
- system_config
- ulimit_config
- #sysctl_config
- deploy_keepalived
- install_docker
- config_docker
- 
- 
- change_hosts
- rootssh_trust
-  echo "mysql_pxc集群node节点已经安装完毕！"
+  yum_config
+  yum_init
+  ssh_config
+  iptables_config
+  system_config
+  ulimit_config
+  change_hosts
+  install_docker
+  install_docker_compace
+  config_docker
+  deploy
+  echo "xunfeng已经安装完毕，请登录相关服务器验收！"
+  echo "详细使用说明请登录查看  https://www.jianshu.com/p/8637c292baa2"
 }
-main > ./setup.log 2>&1
+main

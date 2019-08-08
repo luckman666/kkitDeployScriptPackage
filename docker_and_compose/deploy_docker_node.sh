@@ -13,7 +13,7 @@ fi
 #fsize=2000000
 #exec 2>>$log  #如果执行过程中有错误信息均输出到日志文件中
 
-echo -e "\033[31m 这个是ceph集群脚本！Please continue to enter or ctrl+C to cancel \033[0m"
+echo -e "\033[31m node节点开始执行程序，请稍等！Please continue to enter or ctrl+C to cancel \033[0m"
 #sleep 5
 #yum update
 yum_update(){
@@ -132,6 +132,19 @@ echo "docker已经安装完毕!!!"
 fi
 }
 
+install_docker_compace() {
+test -f /usr/local/bin/docker-compose
+if [[ $? -eq 0 ]];then
+echo "docker-compose 安装完毕!!"
+else
+curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose 
+docker-compose --version
+echo "docker-compose 安装完毕!!"
+fi
+}
+
+
 # config docker
 config_docker(){
 grep "tcp://0.0.0.0:2375" /usr/lib/systemd/system/docker.service
@@ -144,139 +157,6 @@ systemctl restart docker.service
 echo "docker API接口已经配置完毕"
 fi
 }
-
-pull_ceph_image(){
-docker pull registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous
-echo "docker 镜像下载完毕"
-}
-
-
-deploy_ceph_mon(){
-test -d $ceph_base_path/logs/ || mkdir -p $ceph_base_path/logs/
-chmod -R 777 $ceph_base_path/logs/
-docker ps -a | grep -w mon && docker rm -f mon
-docker run -d --net=host --name=mon \
---privileged=true \
--v $ceph_base_path/etc/:/etc/ceph \
--v $ceph_base_path/lib/:/var/lib/ceph \
--v $ceph_base_path/logs/:/var/log/ceph/ \
--e MON_IP=`get_localip` \
--e CEPH_PUBLIC_NETWORK=$ceph_public_network \
-registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous mon
-
-}
-
-config_ceph_command(){
-grep "docker exec mon ceph" /etc/profile
-if [[ $? == 0 ]];then
-echo "别名配置完毕透传完毕！！！"
-else
-echo 'alias ceph="docker exec mon ceph"' >> /etc/profile
-echo 'alias ceph-volume="docker exec mon ceph-volume"' >> /etc/profile
-echo 'alias ss="docker exec rgw ss"' >> /etc/profile
-echo 'alias rbd="docker exec mon rbd"' >> /etc/profile
-echo 'alias rados="docker exec mon rados"' >> /etc/profile
-source /etc/profile
-echo "别名配置完毕透传完毕！！！"
-fi
-}
-
-
-###########OSD #############
-
-# scan_disk
-scan_disk(){
-for i in /sys/class/scsi_host/host*/scan;do echo "- - -" >$i;done
-echo "热扫描磁盘完毕！！！"
-}
-
-
-deploy_osd(){
-num=0
-#bluesstore_num=0
-for odisk in  ${osddisk[@]};do  
-let num+=1
-
-docker run --rm --privileged=true \
--v $disk_path/:/dev/ \
--e OSD_DEVICE=$disk_path/$odisk \
-registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous zap_device
-
-
-if [[ $bluestore == 1 ]];then
-
-if [[ $num -le ${#bluestore_name[@]} ]];then
-
-docker run --rm --privileged=true \
--v $disk_path/:/dev/ \
--e OSD_DEVICE=$disk_path/$bluestore_name \
-registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous zap_device
-
-fi
-
-docker ps -a | grep -w $odisk && docker rm -f $odisk
-
-docker run -d --net=host --name=$odisk --privileged=true \
--v $ceph_base_path/etc/:/etc/ceph \
--v $ceph_base_path/lib/:/var/lib/ceph \
--v $disk_path/:/dev/ \
--e OSD_DEVICE=$disk_path/$odisk \
--e OSD_TYPE=disk \
--e OSD_BLUESTORE=1 \
--e OSD_BLUESTORE_BLOCK_WAL=$disk_path/$bluestore_name \
--e OSD_BLUESTORE_BLOCK_DB=$disk_path/$bluestore_name \
--e CLUSTER=ceph registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous osd_ceph_disk
-#let bluesstore_num+=1
-echo $odisk" 启动完毕"
-else
-
-docker ps -a | grep -w $odisk && docker rm -f $odisk
-
-docker run -d --net=host --name=$odisk --privileged=true \
--v $ceph_base_path/etc/:/etc/ceph \
--v $ceph_base_path/lib/:/var/lib/ceph \
--v $disk_path/:/dev/ \
--e OSD_DEVICE=$disk_path/$odisk \
--e OSD_TYPE=disk \
--e CLUSTER=ceph registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous osd_ceph_disk
-echo $odisk" 启动完毕"
-
-fi
-done
-
-}
-
-deploy_rgw(){
-docker ps -a | grep -w rgw && docker rm -f rgw
-
-docker run \
--d --net=host \
---name=rgw \
--v $ceph_base_path/etc/:/etc/ceph \
--v $ceph_base_path/lib/:/var/lib/ceph  \
-registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous rgw  
-}
-
-
-
-deploy_mgr(){
-
-docker ps -a | grep -w mgr && docker rm -f mgr
-
-docker run \
--d --net=host  \
---name=mgr \
--v $ceph_base_path/etc/:/etc/ceph \
--v $ceph_base_path/lib/:/var/lib/ceph \
-registry.cn-hangzhou.aliyuncs.com/yangb/ceph_luminous mgr
-source /etc/profile
-
-docker exec mon ceph mgr module enable dashboard
-docker exec mon ceph config-key put mgr/dashboard/server_addr $mgr_ip
-docker exec mon ceph config-key put mgr/dashboard/server_port $mgr_monitor_port #指定为7000端口，这里可以自定义修改
-
-}
-
 
 
 #ssh trust
@@ -311,25 +191,13 @@ main(){
  config_docker
  pull_ceph_image
  deploy_ceph_mon
+ install_docker_compace
  config_ceph_command
 
- 
-if [[ $osd == "1" ]];then
-scan_disk
-deploy_osd
-fi
-
-if [[ $rgw == "1" ]];then
-deploy_rgw
-fi
-
-if [[ $mgr == "1" ]];then
-deploy_mgr
-fi
     
 if [[ $bothway == "1" ]];then
  rootssh_trust
 fi
 echo "远端服务器配置完毕"
 }
-main  > ./setup.log 2>&1
+main

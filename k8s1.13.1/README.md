@@ -1,12 +1,16 @@
-# centos7一键部署deploy_Kubernetes:v1.13.1脚本
+# centos7 deploy_Kubernetes-v1.15.0
 
-# k8s 1.15.0一键部署地址：https://github.com/luckman666/deploy_Kubernetes-v1.15.0
-# k8s1.14.1一键部署地址： https://github.com/luckman666/deploy_Kubernetes-v1.14.1
-觉得不错给个star哦！我还会持续更新脚本，但是我想跨代更新，等啥时候出V1.15我在写V1.14的。讲真K8S实在太快了更新的！
+k8s 1.14.1一键部署地址：https://github.com/luckman666/deploy_Kubernetes-v1.14.1
+
+k8s 1.13.1一键部署地址：https://github.com/luckman666/deploy_Kubernetes-v1.13.1
+
+
+优化了部分代码！
+
+觉得不错给个star哦！！
 注意事项：
 
-1、使用git clone的同志们需要将文件夹里面的所有文件cp 到/root下面。确保所有文件都在/root下面。实在不好意思哈！我不想改了！我把路径写成了/root了
-然后只需要在修改base.config里面的固定参数即可。
+1、只需要在修改base.config里面的固定参数即可。
 
 2、给.sh结尾的脚本赋权限。
 
@@ -17,39 +21,12 @@
 5、物理机不用说了，要是虚拟机cpu必须最少是2个哦！切记
 
 
-# 升级内核脚本（这个内核是否需要升级，我没测试过但是写在这里了。反正我是升级了。有需要的就升级吧！或者忽略去直接部署试试？）
-
-执行upgradeKernel.sh就可以将内核升级到4+了，脚本内容如下：
-
-#!/bin/bash
-
-setupkernel(){
-
- rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
- 
- rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
- 
- yum --enablerepo=elrepo-kernel install -y kernel-lt kernel-lt-devel
- 
- grub2-set-default 0
- 
- reboot
- 
-}
-
-setupkernel
 
 # 部署k8s集群具体实现步骤：
 
-git clone https://github.com/luckman666/deploy_Kubernetes-v1.13.1.git
+git clone https://github.com/luckman666/deploy_Kubernetes-v1.15.0.git
 
-cd deploy_Kubernetes-v1.13.1/
-
-chmod -R 755 .
-
-mv * /root
-
-cd /root
+cd deploy_Kubernetes-v1.15.0 && chmod -R 755 .
 
 编辑base.config里面的参数
 
@@ -64,7 +41,7 @@ masterip="192.168.1.107"
 
 K8S版本：
 
-k8s_version="v1.13.1"
+k8s_version="v1.15.0"
 
 服务器root密码
 
@@ -76,11 +53,11 @@ hostname=k8s
 
 集群服务器IP地址
 
-hostip='
+hostip=（
 192.168.1.107
 192.168.1.108
 192.168.1.109
-'
+）
 再部署的时候严格按照我所给的示例参数写哦。换参数不要换格式，以免出错
 
 # 部署完后进入到dashboard文件夹部署dashboard
@@ -104,5 +81,3 @@ kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | gre
 关注公众号回复：k8s   获得k8s各个版本的一键部署脚本
 
 ![index4](https://github.com/luckman666/devops_kkit/blob/master/gzh.jpg)
-
-

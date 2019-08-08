@@ -1,7 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #b8_yang@163.com
-source ./base.config
+#. /etc/profile
 bash_path=$(cd "$(dirname "$0")";pwd)
+source $bash_path/base.config
+
 
 if [[ "$(whoami)" != "root" ]]; then
 	echo "please run this script as root ." >&2
@@ -75,7 +77,13 @@ ssh_config(){
 if [[ `grep 'UserKnownHostsFile' /etc/ssh/ssh_config` ]];then
 echo "pass"
 else
+#chmod 644 /root/.ssh/authorized_keys
+#chmod 600 /root/.ssh/id_rsa
+#chmod 644 /root/.ssh/id_rsa.pub
 sed -i "2i StrictHostKeyChecking no\nUserKnownHostsFile /dev/null" /etc/ssh/ssh_config
+#sed -i "4i RSAAuthentication yes" /etc/ssh/sshd_config
+#sed -i "s/#PubkeyAuthentication yes/PubkeyAuthentication yes/g" /etc/ssh/sshd_config
+systemctl restart sshd
 fi
 }
 
@@ -117,4 +125,5 @@ if [[ $bothway == "1" ]];then
  rootssh_trust
 fi
 }
-main > ./setup.log 2>&1
+main 2>&1
+#> $bash_path/setup.log 2>&1
